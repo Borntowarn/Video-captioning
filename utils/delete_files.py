@@ -3,7 +3,7 @@ import shutil
 
 def delete_files(root_path):
     for r_path in os.listdir(root_path):
-        if r_path != 'videos':
+        if r_path not in ['videos', 'captions.json'] :
             r_path = os.path.join(root_path, r_path)
             if os.path.isdir(r_path):
                 for path in os.listdir(r_path):

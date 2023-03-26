@@ -12,5 +12,8 @@ def extract_audio_from_video(path, video_name, output_ext="wav"):
     audio_folder = os.path.join(path, 'audios')
     audio_name = f'{filename}.{output_ext}'
     
+    if not os.path.isdir(audio_folder):
+        os.mkdir(audio_folder)
+    
     clip.audio.write_audiofile(os.path.join(audio_folder, audio_name))
     return audio_name
