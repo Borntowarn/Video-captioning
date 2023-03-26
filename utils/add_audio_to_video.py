@@ -23,3 +23,7 @@ def add_audio_to_video(path):
         audio_clip = AudioFileClip(f'{path}/audios/{item[1]}')
         final_clip = video_clip.set_audio(audio_clip)
         final_clip.write_videofile(f"{film_with_audiodescr}/{video_name}.mp4", audio_codec='aac')
+        
+        video_clip.close()
+        audio_clip.close()
+        final_clip.close()

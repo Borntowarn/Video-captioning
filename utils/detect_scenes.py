@@ -26,7 +26,7 @@ def detect_scenes(clips_path, intervals, threshold):
         if not os.path.isdir(scenes_folder):
             os.mkdir(scenes_folder)
         
-        scene_list = detect(clip_path, ContentDetector(threshold=threshold, ))
+        scene_list = detect(clip_path, ContentDetector(threshold=threshold))
         if len(scene_list) != 0:
             split_video_ffmpeg(clip_path, scene_list, f'{scenes_folder}/scene_$SCENE_NUMBER.mp4')
             os.remove(clip_path)
