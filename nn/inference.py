@@ -1,12 +1,12 @@
 import os
 
-from utils.extract_clips import extract_clips
-from utils.save_captions import save_captions
-from utils.delete_files import delete_files
+from nn.utils.extract_clips import extract_clips
+from nn.utils.save_captions import save_captions
+from nn.utils.delete_files import delete_files
 
-from utils.add_audio_to_video import add_audio_to_video
-from utils.unite_audio import unite_audio
-from utils.translate_and_voice_final import translate_and_voice
+from nn.utils.add_audio_to_video import add_audio_to_video
+from nn.utils.unite_audio import unite_audio
+from nn.utils.translate_and_voice_final import translate_and_voice
 
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
