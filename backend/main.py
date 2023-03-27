@@ -75,6 +75,10 @@ def handle_request():
     finally:
         session.close()
 
+def video_length(path):
+    import moviepy.editor as mp
+    duration = mp.VideoFileClip(path).duration
+    return duration
 
 @app.route('/api/get_video/', methods=['GET'], strict_slashes=False)
 def get_video():
@@ -84,13 +88,21 @@ def get_video():
         film = session.query(Film).filter(Film.id == film_id).first()
         only_updated = request.args.get('only_updated', 'false').lower() in ['true', '1']
         only_source = request.args.get('only_source', 'false').lower() in ['true', '1']
+        metadata = request.args.get('metadata', 'false').lower() in ['true', '1']
         if film is None:
             return {"status": "error", "message": "Фильм не найден"}
         if only_updated:
             if film.output_video_filename is None:
                 return Response("Фильм еще не обработан")
-            return send_file(os.path.join('data', 'films', film.output_video_filename))
-        return send_file(os.path.join('data', 'films', film.input_filename))
+            path = os.path.join('data', 'films', film.output_video_filename)
+            if metadata:
+                return {"length": video_length(path)}
+            return send_file(path)
+        path = os.path.join('data', 'films', film.input_filename)
+        if metadata:
+            return {"length": video_length(path)}
+        return send_file(path)
+
     except Exception as e:
         print(e)
         return {"status": "error", "message": "Неизвестная ошибка"}
