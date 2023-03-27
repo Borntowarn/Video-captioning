@@ -28,6 +28,7 @@ def main(root_path, videos_path):
             min_length = int((end - start) * 1.3)
             
             pipeline_caption.model.model.beam_generator.min_length = min_length
+            pipeline_caption.model.model.beam_generator.beam_size = 20
             output = pipeline_caption(scene_path)
             all_result_lists[video + '.mp4'][clip + '.mp4'][scene].update(output)
 
