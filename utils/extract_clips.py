@@ -16,4 +16,5 @@ def extract_clips(path, threshold):
         clips_folder, intervals = extract_clip(path, video, intervals)
         videos_intervals[video] = detect_scenes(clips_folder, intervals, threshold)
     
+    print('Scenes fully extracted')
     return videos_intervals

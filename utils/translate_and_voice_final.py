@@ -1,16 +1,15 @@
-from googletrans import Translator
+
 #from google.cloud import texttospeech
 import os
 import pyttsx3
 import torch
 import importlib
-import json
 
 
 def translate_and_voice(path, dict):
     '''Функция, отвечающая за перевод сгенерированного текста и его озвучивание
     :param path: путь к папке inference_video'''
-    translator = Translator()
+    
     films = os.listdir(os.path.join(path, 'videos'))
     generated_audio_folder = os.path.join(path, 'generated_audio')
     if not os.path.isdir(generated_audio_folder):
@@ -24,7 +23,7 @@ def translate_and_voice(path, dict):
                 engine.setProperty("rate", 200)
                 # voices[45].id - Юрий, voices[27].id - Милена
                 engine.setProperty("voice", voices[0].id)
-                translation = translator.translate(value_scene['caption'], src='en', dest='ru')
+                
                 film_num, ext = os.path.splitext(film)
                 clip_num, ext = os.path.splitext(key_clip)
                 scene_num, ext = os.path.splitext(key_scene)
@@ -35,6 +34,6 @@ def translate_and_voice(path, dict):
                 if not os.path.isdir(gen_audio_clip_path):
                     os.mkdir(gen_audio_clip_path)
                 gen_audio_path = f'{gen_audio_clip_path}/{scene_num}.wav'
-                engine.save_to_file(translation.text, gen_audio_path)
+                engine.save_to_file(value_scene, gen_audio_path)
                 engine.runAndWait()
                 #print('Выполнено {}'.format(key_scene))

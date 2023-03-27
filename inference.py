@@ -7,6 +7,7 @@ from utils.delete_files import delete_files
 from utils.add_audio_to_video import add_audio_to_video
 from utils.unite_audio import unite_audio
 from utils.translate_and_voice_final import translate_and_voice
+from utils.translate import translate
 
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
@@ -22,14 +23,16 @@ def main(root_path, videos_path):
         for scene in files:
             video, clip = os.path.normpath(path).split('\\')[-2:]
             scene_path = os.path.join(path, scene)
+            print(scene_path)
             
             start = all_result_lists[video + '.mp4'][clip + '.mp4'][scene]['start']
             end = all_result_lists[video + '.mp4'][clip + '.mp4'][scene]['end']
             min_length = int((end - start) * 1.3)
             
             pipeline_caption.model.model.beam_generator.min_length = min_length
-            pipeline_caption.model.model.beam_generator.beam_size = 20
+            pipeline_caption.model.model.beam_generator.beam_size = 5
             output = pipeline_caption(scene_path)
+            output['caption'] = translate(output['caption'])
             all_result_lists[video + '.mp4'][clip + '.mp4'][scene].update(output)
 
     save_captions(root_path, all_result_lists)
