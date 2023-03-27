@@ -1,15 +1,24 @@
 import os.path
+from threading import Lock
 from time import sleep
-from typing import Callable
+from typing import Callable, Any
 
+import moviepy.editor as mp
 import requests
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QFileDialog, QMainWindow, QTableWidgetItem, \
-    QHeaderView
+    QHeaderView, QLabel
 
 from .backend import *
 from .design_second import Ui_MainWindow
 
+from datetime import datetime, timedelta
+
+API_URL = 'http://localhost:8080'
+
+
+def get_video_length(path):
+    duration = mp.VideoFileClip(path).duration
+    return duration
 
 def get_films_from_folder(folder: str) -> List[str]:
     # Получить все файлы из папки рекурсивно типа .mp4 .avi .mkv
@@ -24,195 +33,164 @@ def get_films_from_folder(folder: str) -> List[str]:
     return films
 
 
-def upload_film(path_to_file: str):
+def upload_film(path_to_file: str,
+                progress_func: Callable[[float], Any] = None,
+                finish_func: Callable[[int], Any] = None):
     # Отправить пост запрос на сервер localhost:8080/api/post_video с файлом
     # После отправки запроса на сервер, сервер должен вернуть нам id фильма
     # Вернуть id фильма
-    request = requests.post('http://localhost:8080/api/post_video',
+    if progress_func is not None:
+        progress_func(0.0)
+
+    request = requests.post(f'{API_URL}/api/post_video',
                             files={'file': open(path_to_file, 'rb')})
     film_id = request.json()['id']
-    return film_id
-    pass
+    if film_id < 0:
+        raise Exception("Неудачна загрузка")
+
+    if finish_func is not None:
+        finish_func(film_id)
+
 
 
 def main_function(path, new_window, ui_window: Ui_MainWindow):
+    in_progress_count = 0
+    finished_count = 0
+    total_count = 0
+    progress_lock = Lock()
+
+    table = ui_window.tableWidget
+    table.setColumnCount(5)
+    table.horizontalHeader().setStretchLastSection(True)
+    table.horizontalHeader().setSectionResizeMode(
+        QHeaderView.Stretch)
+    table.setHorizontalHeaderLabels(["Путь", "Длительность", "Состояние",
+                                     "Ссылка на видео", "Ссылка на обработанное видео"])
+    table.verticalHeader().setVisible(False)
 
     # Если path это папка
     if os.path.isdir(path):
         films_filename = get_films_from_folder(path)
     else:
         films_filename = [path]
-    if len(films_filename) > 0:
-        th1 = threading.Thread(target=upload_film,
-                               args=(path,),
-                               daemon=True)
-        th1.start()
-        th1.join(0.02)
-    ui_window.status.setText("Статус выполнения: обработка...")
+    total_count = len(films_filename)
+    threads = []
+    data_return = [dict() for i in range(total_count)]
+    for film_num in range(total_count):
+        film_path = films_filename[film_num]
+        film_name = Path(film_path).name
+        film_length_seconds = get_video_length(film_path)
+        film_length = datetime(1, 1, 1)+timedelta(seconds=film_length_seconds)
+        table.insertRow(film_num)
+        table.setItem(film_num, 0, QTableWidgetItem(film_path))
+        table.setItem(film_num, 1, QTableWidgetItem(film_length.strftime("%H:%M:%S")))
 
-    table = ui_window.tableWidget
-    table.setColumnCount(3)
-    table.horizontalHeader().setStretchLastSection(True)
-    table.horizontalHeader().setSectionResizeMode(
-        QHeaderView.Stretch)
-    new_window.show()
+        # for i in range(3, 4 + 1):
+        #     table.setCellWidget(film_num, i, QtWidgets.QLabel("В обработке...", openExternalLinks=True))
 
-    def local_func_one_folder():
-        nonlocal th1, table
-        table.setHorizontalHeaderLabels(["Путь", "Длительность", "Состояние"])
-        table.verticalHeader().setVisible(False)
-        total = 0
-        new_entity = 0
-        last_pass = False
-        entity_storage = dict()
-        current_row = -1
-        while True:
-            sleep(0.5)
-            # key = название папки
-            # value - словарь номеров китов и кол-ва файлов с ними
-            for key, value in get_only_stats_from_new_parsed_images().items():
-                for key2, value2 in value.items():
-                    if key2 not in entity_storage:
-                        current_row += 1
-                        entity_storage.update({key2: [value2, current_row]})
-                        table.insertRow(current_row)
-                        x = QTableWidgetItem(str(key2))
-                        x.setTextAlignment(Qt.AlignCenter)
-                        table.setItem(current_row, 0,
-                                      x)
-                        y = QTableWidgetItem(
-                            str(entity_storage[key2][0]))
-                        y.setTextAlignment(Qt.AlignCenter)
-                        table.setItem(current_row, 1, y)
-                    else:
-                        entity_storage[key2][0] += value2
-                        x = QTableWidgetItem(
-                            str(entity_storage[key2][0]))
-                        x.setTextAlignment(Qt.AlignCenter)
-                        table.setItem(entity_storage[key2][1], 1,
-                                      x)
-                    table.setHidden(True)
-                    table.setHidden(False)
-                    new_window.setFocus()
-                    total += value2
-                    if key2 == 0:
-                        new_entity += value2
-                ui_window.pics_count.setText(
-                    "Количество обработанных картинок: " + str(total))
-                ui_window.new_count.setText(
-                    "Количество изображений новых особей: " + str(new_entity))
-
-            if th1.is_alive():
-                continue
-            if last_pass:
-                break
-            last_pass = True
-        ui_window.status.setText("Статус выполнения: завершено!")
-        f = open('../results.csv', mode="w+", encoding='utf8')
-        f.write("ID;quanity\n")
-        for i in range(table.rowCount()):
-            f.write(
-                f"{table.item(i, 0).text()};{table.item(i, 1).text()}\n")
-        f.close()
-
-    def local_func_recur():
-        nonlocal th1, table
-        table.setHorizontalHeaderLabels(["Название папки", "ID кита"])
-        table.verticalHeader().setVisible(False)
-        total = 0
-        new_entity = 0
-        last_pass = False
-        current_row = -1
-        entity_storage = dict()
-        while True:
-            sleep(0.5)
-            for key, value in get_only_stats_from_new_parsed_images().items():
-                if key not in entity_storage:
-                    current_row += 1
-                    local_new = 0
-                    local_old = 0
-                    ent_id = ""
-                    entity_storage.update(
-                        {key: [current_row, local_new, local_old, '0']})
-                else:
-                    local_new = entity_storage[key][1]
-                    local_old = entity_storage[key][2]
-                    ent_id = entity_storage[key][3]
-                for key2, value2 in value.items():
-                    if key2 == 0:
-                        local_old += value2
-                        new_entity += value2
-                    else:
-                        local_new += value2
-                        ent_id = str(key2)
-                    total += value2
-                if local_new < local_old:
-                    ent_id = '0'
-                entity_storage[key][1] = local_new
-                entity_storage[key][2] = local_old
-                entity_storage[key][3] = ent_id
-                if current_row >= table.rowCount():
-                    table.insertRow(current_row)
-                x = QTableWidgetItem(ent_id)
-                x.setTextAlignment(Qt.AlignCenter)
-                table.setItem(entity_storage[key][0], 1,
-                              x)
-                y = QTableWidgetItem(os.path.basename(key))
-                y.setTextAlignment(Qt.AlignCenter)
-                table.setItem(entity_storage[key][0], 0, y)
+        def upload_progress_callback(pr: float):
+            with progress_lock:
+                ui_window.status.setText(
+                    f"Статус выполнения: обработка... {in_progress_count}/{total_count}")
+                table.setItem(film_num, 2, QTableWidgetItem("Обрабатывается"))
                 table.setHidden(True)
                 table.setHidden(False)
-                new_window.setFocus()
-                ui_window.pics_count.setText(
-                    "Количество обработанных картинок: " + str(total))
-                ui_window.new_count.setText(
-                    "Количество изображений новых особей: " + str(new_entity))
 
-            if th1.is_alive():
-                continue
-            if last_pass:
-                break
-            last_pass = True
-        ui_window.status.setText("Статус выполнения: завершено!")
-        f = open('../results.csv', mode="w+", encoding='utf8')
-        f.write("folder;ID\n")
-        for i in range(table.rowCount()):
-            f.write(f"{table.item(i, 0).text()};{table.item(i, 1).text()}\n")
-        f.close()
+        def upload_finish_callback(film_id: int):
+            try:
+                nonlocal data_return, in_progress_count, finished_count, total_count
+                with progress_lock:
+                    in_progress_count -= 1
+                    finished_count += 1
+                    if finished_count == total_count:
+                        ui_window.status.setText(
+                            f"Статус выполнения: обработка завершена")
+                    else:
+                        ui_window.status.setText(
+                            f"Статус выполнения: обработка... {finished_count}/{total_count}")
+                    ui_window.ready_count.setText(f"Готово: {finished_count}")
+                    ui_window.proc_count.setText(f"В процессе: {in_progress_count}")
+                    data_return[film_num]['film_id'] = film_id
+                    table.setItem(film_num, 2, QTableWidgetItem("Обработано"))
+                    item = table.item(film_num, 3)
+                    if item is None:
+                        item = QTableWidgetItem()
+                        table.setItem(film_num, 3, item)
+                    item.setText(f"http://{API_URL}/get_video?film_id={film_id}")
+                    table.setItem(film_num, 4,
+                                  QTableWidgetItem(
+                                      f"http://{API_URL}/get_video?film_id={film_id}&only_updated=1"
+                                  ))
+                    # Обновить таблицу
+                    table.setHidden(True)
+                    table.setHidden(False)
+            except Exception as e:
+                print(e)
+                raise e
+                # table.setCellWidget(film_num, 4, QLabel(f"<a href='http://{API_URL}/"
+                #                                         f"api/get_video?film_id={film_id}&"
+                #                                         f"only_updated=1'>{film_name}</a>", table))
 
-    # if mode == '1':
-    #     th = threading.Thread(target=local_func_one_folder,
-    #                           daemon=True)
-    #     th.start()
-    #     th.join(0.01)
-    # else:
-    #     th = threading.Thread(target=local_func_recur,
-    #                           daemon=True)
-    #     th.start()
-    #     th.join(0.01)
+        # upload_film(film_path, upload_progress_callback, upload_finish_callback)
+        th = threading.Thread(target=upload_film,
+                              args=(film_path, upload_progress_callback, upload_finish_callback),
+                              daemon=True)
+        with lock:
+            in_progress_count += 1
+        th.start()
+        th.join(0.02)
+        threads.append(th)
+    ui_window.status.setText("Статус выполнения: обработка...")
+    new_window.show()
+
+    is_one_alive = True
+    while is_one_alive:
+        with lock:
+            is_one_alive = finished_count != total_count
+            for i in range(total_count):
+                film_id = data_return[i].get('film_id', None)
+                if film_id is not None:
+                    if table.item(i, 3) is not None:
+                        table.setItem(i, 3, None)
+                    text = f"<a href='{API_URL}/api/get_video?film_id={film_id}' " \
+                           f"style=\"color:black;font-size:18px\">Ссылка на видео</a>"
+                    label = QLabel(text)
+                    label.setOpenExternalLinks(True)
+                    table.setCellWidget(i, 3, label)
+
+                    if table.item(i, 4) is not None:
+                        table.setItem(i, 4, None)
+                    text = f"<a href='{API_URL}/api/get_video?film_id={film_id}&only_updated=1' " \
+                           f"style=\"color:black;font-size:18px\">Ссылка на видео</a>"
+                    label = QLabel(text)
+                    label.setOpenExternalLinks(True)
+                    table.setCellWidget(i, 4, label)
+        sleep(0.01)
 
 
 def uploadController(main_window: QMainWindow, new_window: QMainWindow,
                      ui_window) -> Callable:
-    def upload():
-        # Допустимый выбор: папка, файл видео формата .mp4 .avi .mkv
-        dialog = QFileDialog(main_window)
-        dialog.setFileMode(QFileDialog.AnyFile)
-        dialog.setOption(QFileDialog.DontResolveSymlinks)
-        # Установка формата файлов .mp4 .avi .mkv
-        dialog.setNameFilter("Video files (*.mp4 *.avi *.mkv)")
-        dialog.setViewMode(QFileDialog.Detail)
+    try:
+        def upload():
+            # Допустимый выбор: папка, файл видео формата .mp4 .avi .mkv
+            dialog = QFileDialog(main_window)
+            dialog.setFileMode(QFileDialog.AnyFile)
+            dialog.setOption(QFileDialog.DontResolveSymlinks)
+            # Установка формата файлов .mp4 .avi .mkv
+            dialog.setNameFilter("Video files (*.mp4 *.avi *.mkv)")
+            dialog.setViewMode(QFileDialog.Detail)
 
+            if dialog.exec_():
+                path = dialog.selectedFiles()[0]
+                if not path:
+                    return
+                main_window.setHidden(True)
+                main_function(path, new_window, ui_window)
 
-
-        if dialog.exec_():
-            path = dialog.selectedFiles()[0]
-            if not path:
-                return
-            main_window.setHidden(True)
-            main_function(path, new_window, ui_window)
-
-    return upload
+        return upload
+    except Exception as e:
+        print(e)
+        raise e
 
 
 def uploadControllerSecond(new_window: QMainWindow,

@@ -63,7 +63,7 @@
      </spacer>
     </item>
     <item>
-     <widget class="QLabel" name="pics_count">
+     <widget class="QLabel" name="ready_count">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -94,7 +94,7 @@
      </spacer>
     </item>
     <item>
-     <widget class="QLabel" name="new_count">
+     <widget class="QLabel" name="proc_count">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
