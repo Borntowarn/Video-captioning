@@ -1,6 +1,6 @@
 # Python <= 3.10
-PyQt5==5.15.7
 PyQt5-stubs==5.15.6.0
+PyQt5==5.15.7
 PySide2
-requests
 moviepy
+requests

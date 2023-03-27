@@ -1,5 +1,5 @@
-requests
 flask
 flask_cors
-sqlalchemy
 moviepy
+requests
+sqlalchemy
