@@ -6,7 +6,7 @@ from utils.delete_files import delete_files
 
 from utils.add_audio_to_video import add_audio_to_video
 from utils.unite_audio import unite_audio
-from utils.translate_and_voice_final import translate_and_voice
+from utils.voice_text import voice_text
 from utils.translate import translate
 
 from modelscope.pipelines import pipeline
@@ -36,7 +36,7 @@ def main(root_path, videos_path):
             all_result_lists[video + '.mp4'][clip + '.mp4'][scene].update(output)
 
     save_captions(root_path, all_result_lists)
-    translate_and_voice(root_path, all_result_lists)
+    voice_text(root_path, all_result_lists)
     unite_audio(root_path, all_result_lists)
     add_audio_to_video(root_path)
     

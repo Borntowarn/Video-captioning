@@ -1,29 +1,26 @@
-
-#from google.cloud import texttospeech
+import json
 import os
-import pyttsx3
 import torch
-import importlib
+import torchaudio
 
 
-def translate_and_voice(path, dict):
+def voice_text(path, dict):
     '''Функция, отвечающая за перевод сгенерированного текста и его озвучивание
     :param path: путь к папке inference_video'''
-    
     films = os.listdir(os.path.join(path, 'videos'))
     generated_audio_folder = os.path.join(path, 'generated_audio')
     if not os.path.isdir(generated_audio_folder):
         os.mkdir(generated_audio_folder)
+    language = 'ru'
+    model_id = 'v3_1_ru'
+    sample_rate = 48000
+    speaker = 'xenia'
+    model, exapmle_text = torch.hub.load(repo_or_dir='snakers4/silero-models', model='silero_tts',
+                                         language=language, speaker=model_id)
+    # model.to(device)  # gpu or cpu
     for film in films:
         for key_clip, values_clip in dict[film].items():
             for key_scene, value_scene in dict[film][key_clip].items():
-                importlib.reload(pyttsx3)
-                engine = pyttsx3.init(driverName='sapi5')
-                voices = engine.getProperty("voices")
-                engine.setProperty("rate", 200)
-                # voices[45].id - Юрий, voices[27].id - Милена
-                engine.setProperty("voice", voices[0].id)
-                
                 film_num, ext = os.path.splitext(film)
                 clip_num, ext = os.path.splitext(key_clip)
                 scene_num, ext = os.path.splitext(key_scene)
@@ -34,6 +31,7 @@ def translate_and_voice(path, dict):
                 if not os.path.isdir(gen_audio_clip_path):
                     os.mkdir(gen_audio_clip_path)
                 gen_audio_path = f'{gen_audio_clip_path}/{scene_num}.wav'
-                engine.save_to_file(value_scene['caption'], gen_audio_path)
-                engine.runAndWait()
-                #print('Выполнено {}'.format(key_scene))
+                audio = model.apply_tts(text=value_scene['caption'] + '.',
+                                        speaker=speaker,
+                                        sample_rate=sample_rate)
+                torchaudio.save(gen_audio_path, audio.unsqueeze(0), sample_rate)
