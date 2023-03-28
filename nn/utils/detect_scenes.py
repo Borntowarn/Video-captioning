@@ -27,6 +27,12 @@ def detect_scenes(clips_path, intervals, threshold):
             os.mkdir(scenes_folder)
         
         scene_list = detect(clip_path, ContentDetector(threshold=threshold))
+        tmp = []
+        for start1, end1 in scene_list:
+            if start1.get_frames() != end1.get_frames() \
+            and end1.get_seconds() - start1.get_seconds() > 1:
+                tmp.append((start1, end1))
+        scene_list = tmp
         if len(scene_list) != 0:
             split_video_ffmpeg(clip_path, scene_list, f'{scenes_folder}/scene_$SCENE_NUMBER.mp4')
             os.remove(clip_path)
@@ -35,5 +41,5 @@ def detect_scenes(clips_path, intervals, threshold):
             shutil.move(clip_path, os.path.join(scenes_folder, "scene_001.mp4"))
             scene_intervals[clip] = {'scene_001.mp4': {'start': start,
                                                        'end': end}}
-        
+
     return scene_intervals
