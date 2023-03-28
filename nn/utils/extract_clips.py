@@ -14,6 +14,8 @@ def extract_clips(path, threshold):
         audio_name = extract_audio_from_video(path, video)
         intervals = find_intervals_to_describe(path, audio_name)
         clips_folder, intervals = extract_clip(path, video, intervals)
+        
+        video, ext = os.path.splitext(video)
         videos_intervals[video] = detect_scenes(clips_folder, intervals, threshold)
     
     print('Scenes fully extracted')

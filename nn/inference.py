@@ -25,15 +25,16 @@ def main(root_path, videos_path):
             scene_path = os.path.join(path, scene)
             print(scene_path)
             
-            start = all_result_lists[video + '.mp4'][clip + '.mp4'][scene]['start']
-            end = all_result_lists[video + '.mp4'][clip + '.mp4'][scene]['end']
+            start = all_result_lists[video][clip + '.mp4'][scene]['start']
+            end = all_result_lists[video][clip + '.mp4'][scene]['end']
             min_length = int((end - start) * 1.3)
             
             pipeline_caption.model.model.beam_generator.min_length = min_length
+            #pipeline_caption.model.model.beam_generator.max_length = max_length
             pipeline_caption.model.model.beam_generator.beam_size = 5
             output = pipeline_caption(scene_path)
             output['caption'] = translate(output['caption'])
-            all_result_lists[video + '.mp4'][clip + '.mp4'][scene].update(output)
+            all_result_lists[video][clip + '.mp4'][scene].update(output)
 
     save_captions(root_path, all_result_lists)
     voice_text(root_path, all_result_lists)

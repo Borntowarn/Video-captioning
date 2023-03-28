@@ -23,3 +23,5 @@ def add_audio_to_video(path):
         video_clip.close()
         audio_clip.close()
         final_clip.close()
+
+add_audio_to_video('inference_videos')
