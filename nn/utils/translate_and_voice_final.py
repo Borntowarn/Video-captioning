@@ -34,6 +34,6 @@ def translate_and_voice(path, dict):
                 if not os.path.isdir(gen_audio_clip_path):
                     os.mkdir(gen_audio_clip_path)
                 gen_audio_path = f'{gen_audio_clip_path}/{scene_num}.wav'
-                engine.save_to_file(value_scene, gen_audio_path)
+                engine.save_to_file(value_scene['caption'], gen_audio_path)
                 engine.runAndWait()
                 #print('Выполнено {}'.format(key_scene))
