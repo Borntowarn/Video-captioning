@@ -11,6 +11,7 @@ from inference import *
 app = flask.Flask(__name__)
 CORS(app)
 
+
 def just_copy(filename):
     """
     Просто копирует файл из папки inference_videos/videos в папку films_with_audiodescr
@@ -20,6 +21,7 @@ def just_copy(filename):
     videos_path = input_path + '/' + 'videos'
     final_film_path = os.path.join(output_path, filename)
     shutil.copy(os.path.join(videos_path, filename), final_film_path)
+
 
 @app.route('/api', methods=['POST'], strict_slashes=False)
 def api():
@@ -40,6 +42,8 @@ def api():
     # Проверка наличия папки clips внутри inference_videos
     if not os.path.exists(clips_path):
         os.makedirs(clips_path)
+    # Удаление содержимого clips внутри inference_videos
+    delete_files(input_path)
     # получение файла
     if 'file' not in request.files:
         return 'No file part', 405
@@ -60,7 +64,7 @@ def api():
     except Exception as e:
         print(e)
         traceback.print_exception(e)
-        return "Внутренняя ошибка: "+str(e), 500
+        return "Внутренняя ошибка: " + str(e), 500
     finally:
         delete_files(input_path)
 

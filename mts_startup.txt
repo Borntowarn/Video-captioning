@@ -1,5 +1,5 @@
-conda activate modelscope
 cd app/nn
+conda activate modelscope
 nohup python nn_api.py&
 conda deactivate
 conda activate back
