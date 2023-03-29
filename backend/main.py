@@ -1,5 +1,6 @@
 import os
 import re
+import traceback
 from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
@@ -70,35 +71,88 @@ class ProcessPipe(Thread):
             if film not in self.films_to_process:
                 self.films_to_process.append(film)
 
+    def recycle(self, path: str) -> bytes | None:
+        # Отправить файл на обработку в нейросеть через NN_API_URL/api POST
+        r = requests.post(f"{NN_API_URL}/api",
+                          files={"file": open(path, 'rb')})
+        # Получить ответ в виде файла и сохранить его с тем же именем,
+        # что и входной файл, но с добавкой "_updated"
+        # Проверка наличия в ответе файла
+        if r.status_code != 200:
+            return
+        if r.headers['Content-Type'] != 'video/mp4':
+            return
+        return r.content
+
+
     def iterate_process(self):
+        if not os.path.exists('data/tmp'):
+            os.mkdir('data/tmp')
         if len(self.films_in_process) < 1:
             return
         for film in self.films_in_process.copy():
             with self.lock:
                 self.films_in_process.remove(film)
-            path = film.input_filename
-            if not os.path.exists(os.path.join('data', 'films', path)):
+            film_filename = film.input_filename
+            updated_film_filename = f"{Path(film_filename).stem}_updated{Path(film_filename).suffix}"
+            updated_film_path = os.path.join('data', 'films', updated_film_filename)
+            if not os.path.exists(os.path.join('data', 'films', film_filename)):
                 continue
-            # Отправить файл на обработку в нейросеть через NN_API_URL/api POST
-            r = requests.post(f"{NN_API_URL}/api",
-                              files={"file": open(os.path.join('data', 'films', path), 'rb')})
-            # Получить ответ в виде файла и сохранить его с тем же именем,
-            # что и входной файл, но с добавкой "_updated"
-            # Проверка наличия в ответе файла
-            if r.status_code != 200:
+            # Разделить видео по 10 минут
+            print(f"Делим на куски фильм {film_filename}")
+            clip = mp.VideoFileClip(os.path.join('data', 'films', film_filename))
+            clips: list[mp.VideoFileClip] = []
+            first_clip_durations = [60, 300]
+            for step, i in enumerate(range(0, int(clip.duration), 600)):
+                if step < len(first_clip_durations):
+                    end_time = i + first_clip_durations[step]
+                else:
+                    end_time = i + 600
+                if end_time > clip.duration:
+                    end_time = clip.duration
+                clips.append(clip.subclip(i, end_time))
+                print(f"Кусок {end_time-i} секунд")
+            # Отправить каждый кусок на обработку
+            broken_film = False
+            for i, clip in enumerate(clips):
+                clip_filename = f"{Path(film_filename).stem}_{i}{Path(film_filename).suffix}"
+                clip_path = os.path.join('data', 'tmp', clip_filename)
+                clip.write_videofile(clip_path,
+                                     codec='libx264' if 'mkv' in Path(film_filename).suffix else None)
+                print(f"Кусок {i} сохранен в {clip_path}")
+                updated_clip_content = self.recycle(clip_path)
+                if updated_clip_content is None:
+                    broken_film = True
+                    break
+                # Сохраняет полученный кусок в файл с суффиксом "_updated"
+                updated_clip_filename = f"{Path(film_filename).stem}_{i}_updated{Path(film_filename).suffix}"
+                updated_clip_path = os.path.join('data', 'tmp', updated_clip_filename)
+                print(f"Сохраняем обновленный кусок в файл {updated_clip_path}")
+                with open(updated_clip_path, 'wb') as f:
+                    f.write(updated_clip_content)
+                # Склеивание с текущим обработанным фильмом
+                if not os.path.exists(updated_film_path):
+                    updated_film = mp.VideoFileClip(updated_clip_path)
+                    with Session() as session:
+                        film = session.query(Film).filter(Film.id == film.id).first()
+                        film.output_video_filename = updated_film_filename
+                        session.commit()
+                else:
+                    updated_film = mp.concatenate_videoclips([mp.VideoFileClip(updated_film_path),
+                                                          mp.VideoFileClip(updated_clip_path)])
+                print(f"Фильм дополнен до {updated_film.duration} секунд")
+                updated_film.write_videofile(updated_film_path,
+                                             codec='libx264' if 'mkv' in Path(updated_film_path).suffix else None)
+                # Удалить временные файлы
+                clip.close()
+                if os.path.exists(clip_path):
+                    os.remove(clip_path)
+                if os.path.exists(updated_clip_path):
+                    os.remove(updated_clip_path)
+            if broken_film:
+                # TODO: Сохранить фильм в базу данных как "broken"
                 continue
-            if r.headers['Content-Type'] != 'video/mp4':
-                continue
-            filename_out = Path(path).stem + '_updated' + Path(path).suffix
-            with open(os.path.join('data', 'films', filename_out), 'wb') as f:
-                f.write(r.content)
-            # Обновить запись в бд
-            with Session() as session:
-                film = session.query(Film).filter(Film.id == film.id).first()
-                film.output_video_filename = filename_out
-                session.commit()
-                session.flush()
-            pass
+
 
 
 pipe = ProcessPipe()
@@ -111,6 +165,8 @@ def handle_request():
     session = Session()
     try:
         # Получение файла из запроса
+        if 'file' not in request.files:
+            return "File not set", 400
         file = request.files['file']
         file_content = file.read()
         # Сохранение файла в бд
@@ -137,7 +193,8 @@ def handle_request():
         return {"id": film.id}
     except Exception as e:
         print(e)
-        return {"id": -1}
+        traceback.print_exception(e)
+        return {"id": -1}, 500
     finally:
         session.close()
 

@@ -1,4 +1,5 @@
 import shutil
+import traceback
 from pathlib import Path
 
 import flask
@@ -33,7 +34,6 @@ def api():
     clips_path = input_path + '/' + clips_folder
     videos_path = input_path + '/' + 'videos'
     output_path = 'films_with_audiodescr'
-
     # Проверка наличия папки inference_videos
     if not os.path.exists(input_path):
         os.makedirs(input_path)
@@ -46,18 +46,21 @@ def api():
     file = flask.request.files['file']
     if file is None or file.filename == '':
         return 'No selected file', 405
+    print(f"Обрабатываем {file.filename}")
     try:
         temp_filename = 'temp' + Path(file.filename).suffix
         # копирование в inference_videos
         file.save(os.path.join(videos_path, temp_filename))
         # запуск inference
-        # main(input_path, clips_folder)
+        main(input_path, clips_folder)
         # Получение обработанного видео
         final_film_path = os.path.join(output_path, temp_filename)
         # возврат файла
         return flask.send_file(final_film_path, as_attachment=True)
     except Exception as e:
-        return str(e), 500
+        print(e)
+        traceback.print_exception(e)
+        return "Внутренняя ошибка: "+str(e), 500
     finally:
         delete_files(input_path)
 
