@@ -68,7 +68,10 @@ https://user-images.githubusercontent.com/90902903/228550154-cb058727-b3ee-4583-
 `py app.py`  
 Также есть возможность запустить приложение в виде .exe файла.
 
-#### Интерфейс
+### Интерфейс
+
+<img width="800" alt="image" src="https://user-images.githubusercontent.com/90902903/228605705-1a712293-27dd-45ef-b3c7-816f45ac9597.png">
+
 
 ## Полезные ссылочки:
 - [Ссылка на страницу сайта с нашим решением](http://f0798611.xsph.ru/)
