@@ -12,10 +12,10 @@ from utils.translate import translate
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
 
+model_id = 'damo/multi-modal_hitea_video-captioning_base_en'
+pipeline_caption = pipeline(Tasks.video_captioning, model=model_id, device='cuda')
 
 def main(root_path, videos_path):
-    model_id = 'damo/multi-modal_hitea_video-captioning_base_en'
-    pipeline_caption = pipeline(Tasks.video_captioning, model=model_id, device='cuda')
     all_result_lists = extract_clips(root_path, 50)
     print(all_result_lists)
     for path, folders, files in os.walk(os.path.join(root_path, videos_path)):

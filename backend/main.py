@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -17,14 +18,16 @@ from model.film import Film, Session, clear
 app = Flask(__name__)
 CORS(app)
 
-NN_API_URL = "http://localhost:8081"
+NN_API_URL = os.environ.get('NN_API_URL', "http://localhost:8081")
+
+session = Session()
+
 
 @app.route('/api/await_url_updated_video', methods=['GET'], strict_slashes=False)
 def wait_and_get_url_to_updated_video():
     # Ожидание появления обновленного видео с интервалом в секунду, но не более минуты
     # После появления видео, вернуть ссылку на него
     # Если видео не появилось, вернуть None
-    session = Session()
     film_id = request.args.get('film_id')
     if film_id is None:
         # Вернуть BAD REQUEST
@@ -39,6 +42,9 @@ def wait_and_get_url_to_updated_video():
         if (time_now - time_start).seconds > 60:
             return {"url": None}
     return {"url": f"{NN_API_URL}/api/get_video?film_id={film_id}&only_updated=1"}
+
+
+file_lock = Lock()
 
 
 class ProcessPipe(Thread):
@@ -84,7 +90,6 @@ class ProcessPipe(Thread):
             return
         return r.content
 
-
     def iterate_process(self):
         if not os.path.exists('data/tmp'):
             os.mkdir('data/tmp')
@@ -100,39 +105,29 @@ class ProcessPipe(Thread):
                 continue
             # Разделить видео по 10 минут
             print(f"Делим на куски фильм {film_filename}")
-            clip = mp.VideoFileClip(os.path.join('data', 'films', film_filename))
+            input_clip = mp.VideoFileClip(os.path.join('data', 'films', film_filename))
             clips: list[mp.VideoFileClip] = []
             first_clip_durations = [60, 300, 600]
             step = 0
             cur_time = 0
             end_time = 0
-            while end_time < int(clip.duration):
-                end_time += first_clip_durations[step]
-                if end_time > clip.duration:
-                    end_time = clip.duration
-                print(cur_time, end_time)
-                clips.append(clip.subclip(cur_time, end_time))
+            while end_time < int(input_clip.duration):
+                # Не допускаем уходить в бесконечность
+                if first_clip_durations[step] > 0:
+                    end_time += first_clip_durations[step]
+                else:
+                    end_time += 600
+                if end_time > input_clip.duration:
+                    end_time = input_clip.duration
+                clips.append(input_clip.subclip(cur_time, end_time))
+                print(f"Кусок {end_time - cur_time} секунд")
                 cur_time = end_time
                 if step < len(first_clip_durations) - 1:
                     step += 1
-                
-            
-            # for step, i in enumerate(range(0, int(clip.duration), 600)):
-            #     if step < len(first_clip_durations):
-            #         end_time = i + first_clip_durations[step]
-            #     else:
-            #         end_time = i + 600
-            #     if end_time > clip.duration:
-            #         end_time = clip.duration
-            #     clips.append(clip.subclip(i, end_time))
-            #     print(f"Кусок {end_time-i} секунд")
-            
-            
+
             # Отправить каждый кусок на обработку
             broken_film = False
             for i, clip in enumerate(clips):
-                name, ext = os.path.splitext(updated_film_filename)
-                updated_film_path = os.path.join('data', 'films', f'{name}_{i}{ext}')
                 clip_filename = f"{Path(film_filename).stem}_{i}{Path(film_filename).suffix}"
                 clip_path = os.path.join('data', 'tmp', clip_filename)
                 clip.write_videofile(clip_path,
@@ -149,32 +144,47 @@ class ProcessPipe(Thread):
                 with open(updated_clip_path, 'wb') as f:
                     f.write(updated_clip_content)
                 # Склеивание с текущим обработанным фильмом
-                if not os.path.exists(os.path.join('data', 'films', f'{name}_{i-1}{ext}')):
-                    updated_film = mp.VideoFileClip(updated_clip_path)
-                    with Session() as session:
-                        film = session.query(Film).filter(Film.id == film.id).first()
-                        film.output_video_filename = updated_film_filename
-                        session.commit()
+                copy_updated_film_path = None
+                if not os.path.exists(os.path.join(updated_film_path)):
+                    new_updated_film = mp.VideoFileClip(updated_clip_path)
+                    film = session.query(Film).filter(Film.id == film.id).first()
+                    film.output_video_filename = updated_film_filename
+                    session.commit()
                 else:
-                    updated_film = mp.concatenate_videoclips([mp.VideoFileClip(os.path.join('data', 'films', f'{name}_{i-1}{ext}')),
-                                                              mp.VideoFileClip(updated_clip_path)])
-                    
-                print(f"Фильм дополнен до {updated_film.duration} секунд")
-                updated_film.write_videofile(updated_film_path,
-                                             codec='libx264' if 'mkv' in Path(updated_film_path).suffix else None)
-                if i > 0:
-                    os.remove(os.path.join('data', 'films', f'{name}_{i-1}{ext}'))
+                    copy_updated_film_filename = f"{Path(updated_film_path).stem}_updated{Path(updated_film_path).suffix}"
+                    copy_updated_film_path = os.path.join('data/tmp', copy_updated_film_filename)
+                    shutil.copy(updated_film_path, copy_updated_film_path)
+                    new_updated_film = mp.concatenate_videoclips([
+                        mp.VideoFileClip(copy_updated_film_path),
+                        mp.VideoFileClip(updated_clip_path)]
+                    )
+
+                new_updated_film_filename = f"{Path(film_filename).stem}_updated_new{Path(film_filename).suffix}"
+                new_updated_film_path = os.path.join('data/tmp', new_updated_film_filename)
+                new_updated_film.write_videofile(new_updated_film_path,
+                                                 codec='libx264' if 'mkv' in Path(
+                                                     new_updated_film_path).suffix else None)
+
+                print(f"Фильм дополнен до {new_updated_film.duration} секунд")
+                with file_lock:
+                    shutil.copy(new_updated_film_path, updated_film_path)
+                os.remove(new_updated_film_path)
                 # Удалить временные файлы
-                updated_film.close()
-                if os.path.exists(clip_path):
-                    os.remove(clip_path)
-                if os.path.exists(updated_clip_path):
-                    os.remove(updated_clip_path)
-            clip.close()
+                try:
+                    new_updated_film.close()
+                    if os.path.exists(clip_path):
+                        os.remove(clip_path)
+                    if os.path.exists(updated_clip_path):
+                        os.remove(updated_clip_path)
+                    if copy_updated_film_path is not None:
+                        if os.path.exists(copy_updated_film_path):
+                            os.remove(copy_updated_film_path)
+                except Exception as _:
+                    pass
+            input_clip.close()
             if broken_film:
                 # TODO: Сохранить фильм в базу данных как "broken"
                 continue
-
 
 
 pipe = ProcessPipe()
@@ -184,7 +194,6 @@ pipe.start()
 # Получение видео в запросе
 @app.route('/api/post_video', methods=['POST'], strict_slashes=False)
 def handle_request():
-    session = Session()
     try:
         # Получение файла из запроса
         if 'file' not in request.files:
@@ -217,8 +226,6 @@ def handle_request():
         print(e)
         traceback.print_exception(e)
         return {"id": -1}, 500
-    finally:
-        session.close()
 
 
 def video_length(path):
