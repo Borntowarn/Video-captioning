@@ -1,6 +1,8 @@
 films_with_audiodescr
 inference_videos
 *.mp4
+*.mkv
+*.avi
 
 ### Example user template template
 ### Example user template
