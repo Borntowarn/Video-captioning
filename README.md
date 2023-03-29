@@ -61,7 +61,7 @@ https://user-images.githubusercontent.com/90902903/228550154-cb058727-b3ee-4583-
 ## Запуск
 Установить библеотеки. Есть 3 возможности запуска:
     Запуск локально
-    Запуск на хостинге (все развернуто на MTS Cloud)
+    Запуск на хостинге http://f0798611.xsph.ru/ (все развернуто на MTS Cloud)
 `pip install -r requirements.txt`
 Команда для запуска (source) из папки проекта
 `py app.py`  
