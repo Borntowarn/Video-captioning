@@ -1,7 +1,7 @@
-import json
 import os
 import torch
 import torchaudio
+from ssml_builder.core import Speech
 
 
 def voice_text(path, dict):
@@ -22,6 +22,7 @@ def voice_text(path, dict):
         film, ext = os.path.splitext(film)
         for key_clip, values_clip in dict[film].items():
             for key_scene, value_scene in dict[film][key_clip].items():
+                speech = Speech()
                 clip_num, ext = os.path.splitext(key_clip)
                 scene_num, ext = os.path.splitext(key_scene)
                 gen_audio_film_path = f'{generated_audio_folder}/{film}'
@@ -31,8 +32,9 @@ def voice_text(path, dict):
                 if not os.path.isdir(gen_audio_clip_path):
                     os.mkdir(gen_audio_clip_path)
                 gen_audio_path = f'{gen_audio_clip_path}/{scene_num}.wav'
-                audio = model.apply_tts(text=value_scene['caption'] + '.',
+                text = value_scene['caption'] + '.'
+                speech.prosody(value=text, rate='fast', pitch='medium')
+                audio = model.apply_tts(ssml_text=speech.speak(),
                                         speaker=speaker,
-                                        sample_rate=sample_rate,
-                                        )
+                                        sample_rate=sample_rate)
                 torchaudio.save(gen_audio_path, audio.unsqueeze(0), sample_rate)
