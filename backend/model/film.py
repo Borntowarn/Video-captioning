@@ -27,7 +27,7 @@ def clear():
     session = Session()
     try:
         # Удалить все записи с id > 3
-        session.query(Film).filter(Film.id > 3).delete()
+        session.query(Film).filter(Film.id > 4).delete()
         session.commit()
     finally:
         session.close()
