@@ -2,7 +2,9 @@ import os
 import shutil
 
 from collections import defaultdict
-from scenedetect import detect, ContentDetector, split_video_ffmpeg
+from scenedetect import detect, ContentDetector, split_video_ffmpeg, AdaptiveDetector
+
+import cv2
 
 
 def l(start, end):
@@ -26,7 +28,17 @@ def detect_scenes(clips_path, intervals, threshold):
         if not os.path.isdir(scenes_folder):
             os.mkdir(scenes_folder)
         
+        # vidcap = cv2.VideoCapture(clip_path)
+        # fps = vidcap.get(cv2.CAP_PROP_FPS)
+        # vidcap.release()
+        
         scene_list = detect(clip_path, ContentDetector(threshold=threshold))
+        tmp = []
+        for start1, end1 in scene_list:
+            if start1.get_frames() != end1.get_frames() \
+            and end1.get_seconds() - start1.get_seconds() > 1:
+                tmp.append((start1, end1))
+        scene_list = tmp
         if len(scene_list) != 0:
             split_video_ffmpeg(clip_path, scene_list, f'{scenes_folder}/scene_$SCENE_NUMBER.mp4')
             os.remove(clip_path)
@@ -35,5 +47,5 @@ def detect_scenes(clips_path, intervals, threshold):
             shutil.move(clip_path, os.path.join(scenes_folder, "scene_001.mp4"))
             scene_intervals[clip] = {'scene_001.mp4': {'start': start,
                                                        'end': end}}
-        
+
     return scene_intervals
