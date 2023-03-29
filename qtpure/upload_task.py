@@ -5,7 +5,7 @@ from typing import Callable, Any
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 
-API_URL = os.environ.get('API_URL', 'http://projectvoid.play.ai:8080')
+API_URL = os.environ.get('API_URL', 'http://pinkcats.my.to:8080')
 
 
 def upload_film(path_to_file: str,
