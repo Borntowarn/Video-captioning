@@ -18,7 +18,7 @@ from model.film import Film, Session, clear
 app = Flask(__name__)
 CORS(app)
 
-NN_API_URL = os.environ.get('NN_API_URL', "http://localhost:8081")
+API_NN_URL = os.environ.get('API_NN_URL', "http://localhost:8081")
 
 session = Session()
 
@@ -37,11 +37,30 @@ def wait_and_get_url_to_updated_video():
         return {"url": None}
     time_start = datetime.now()
     while film.output_video_filename is None:
+        sleep(1)
         film = session.query(Film).filter(Film.id == film_id).first()
         time_now = datetime.now()
         if (time_now - time_start).seconds > 60:
             return {"url": None}
-    return {"url": f"{NN_API_URL}/api/get_video?film_id={film_id}&only_updated=1"}
+    return {"url": f"{API_NN_URL}/api/get_video?film_id={film_id}&only_updated=1"}
+
+
+@app.route('/api/await_and_get_updated_video', methods=['GET'], strict_slashes=False)
+def await_and_get_updated_video():
+    film_id = request.args.get('film_id')
+    if film_id is None:
+        # Вернуть BAD REQUEST
+        return "Не указан film_id", 400
+    film = session.query(Film).filter(Film.id == film_id).first()
+    if film is None:
+        return {"url": None}
+    time_start = datetime.now()
+    while film.output_video_filename is None:
+        film = session.query(Film).filter(Film.id == film_id).first()
+        time_now = datetime.now()
+        if (time_now - time_start).seconds > 60:
+            return {"url": None}
+    return {"url": f"{API_NN_URL}/api/get_video?film_id={film_id}&only_updated=1"}
 
 
 file_lock = Lock()
@@ -79,7 +98,7 @@ class ProcessPipe(Thread):
 
     def recycle(self, path: str) -> Union[bytes, None]:
         # Отправить файл на обработку в нейросеть через NN_API_URL/api POST
-        r = requests.post(f"{NN_API_URL}/api",
+        r = requests.post(f"{API_NN_URL}/api",
                           files={"file": open(path, 'rb')})
         # Получить ответ в виде файла и сохранить его с тем же именем,
         # что и входной файл, но с добавкой "_updated"
@@ -98,9 +117,15 @@ class ProcessPipe(Thread):
         for film in self.films_in_process.copy():
             with self.lock:
                 self.films_in_process.remove(film)
+            if film.output_video_filename is not None:
+                # Удалить файл и убрать запись об обработке
+                film.output_video_filename = None
+                session.commit()
             film_filename = film.input_filename
             updated_film_filename = f"{Path(film_filename).stem}_updated{Path(film_filename).suffix}"
             updated_film_path = os.path.join('data', 'films', updated_film_filename)
+            if os.path.exists(updated_film_path):
+                os.remove(updated_film_path)
             if not os.path.exists(os.path.join('data', 'films', film_filename)):
                 continue
             # Разделить видео по 10 минут
@@ -147,9 +172,6 @@ class ProcessPipe(Thread):
                 copy_updated_film_path = None
                 if not os.path.exists(os.path.join(updated_film_path)):
                     new_updated_film = mp.VideoFileClip(updated_clip_path)
-                    film = session.query(Film).filter(Film.id == film.id).first()
-                    film.output_video_filename = updated_film_filename
-                    session.commit()
                 else:
                     copy_updated_film_filename = f"{Path(updated_film_path).stem}_updated{Path(updated_film_path).suffix}"
                     copy_updated_film_path = os.path.join('data/tmp', copy_updated_film_filename)
@@ -169,6 +191,9 @@ class ProcessPipe(Thread):
                 with file_lock:
                     shutil.copy(new_updated_film_path, updated_film_path)
                 os.remove(new_updated_film_path)
+                film = session.query(Film).filter(Film.id == film.id).first()
+                film.output_video_filename = updated_film_filename
+                session.commit()
                 # Удалить временные файлы
                 try:
                     new_updated_film.close()
