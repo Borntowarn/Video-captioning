@@ -5,14 +5,14 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
-from typing import Callable, Any, Iterable, Mapping
+from typing import Callable, Any, Iterable, Mapping, Union
 
 import moviepy.editor as mp
 import requests
 from flask import Flask, request, Response, send_file
 from flask_cors import CORS
 
-from model.film import Film, Session
+from model.film import Film, Session, clear
 
 app = Flask(__name__)
 CORS(app)
@@ -44,12 +44,12 @@ def wait_and_get_url_to_updated_video():
 class ProcessPipe(Thread):
 
     def __init__(self, group: None = None,
-                 target: Callable[..., Any] | None = None,
-                 name: str | None = None,
+                 target: Union[Callable[..., Any], None] = None,
+                 name: Union[str, None] = None,
                  args: Iterable[Any] = None,
-                 kwargs: Mapping[str, Any] | None = None,
+                 kwargs: Union[Mapping[str, Any], None] = None,
                  *,
-                 daemon: bool | None = None) -> None:
+                 daemon: Union[bool, None] = None) -> None:
         super().__init__(group, target, name, args, kwargs, daemon=daemon)
         self.lock = Lock()
         self.films_to_process: list[Film] = []
@@ -71,7 +71,7 @@ class ProcessPipe(Thread):
             if film not in self.films_to_process:
                 self.films_to_process.append(film)
 
-    def recycle(self, path: str) -> bytes | None:
+    def recycle(self, path: str) -> Union[bytes, None]:
         # Отправить файл на обработку в нейросеть через NN_API_URL/api POST
         r = requests.post(f"{NN_API_URL}/api",
                           files={"file": open(path, 'rb')})
@@ -102,19 +102,37 @@ class ProcessPipe(Thread):
             print(f"Делим на куски фильм {film_filename}")
             clip = mp.VideoFileClip(os.path.join('data', 'films', film_filename))
             clips: list[mp.VideoFileClip] = []
-            first_clip_durations = [60, 300]
-            for step, i in enumerate(range(0, int(clip.duration), 600)):
-                if step < len(first_clip_durations):
-                    end_time = i + first_clip_durations[step]
-                else:
-                    end_time = i + 600
+            first_clip_durations = [60, 300, 600]
+            step = 0
+            cur_time = 0
+            end_time = 0
+            while end_time < int(clip.duration):
+                end_time += first_clip_durations[step]
                 if end_time > clip.duration:
                     end_time = clip.duration
-                clips.append(clip.subclip(i, end_time))
-                print(f"Кусок {end_time-i} секунд")
+                print(cur_time, end_time)
+                clips.append(clip.subclip(cur_time, end_time))
+                cur_time = end_time
+                if step < len(first_clip_durations) - 1:
+                    step += 1
+                
+            
+            # for step, i in enumerate(range(0, int(clip.duration), 600)):
+            #     if step < len(first_clip_durations):
+            #         end_time = i + first_clip_durations[step]
+            #     else:
+            #         end_time = i + 600
+            #     if end_time > clip.duration:
+            #         end_time = clip.duration
+            #     clips.append(clip.subclip(i, end_time))
+            #     print(f"Кусок {end_time-i} секунд")
+            
+            
             # Отправить каждый кусок на обработку
             broken_film = False
             for i, clip in enumerate(clips):
+                name, ext = os.path.splitext(updated_film_filename)
+                updated_film_path = os.path.join('data', 'films', f'{name}_{i}{ext}')
                 clip_filename = f"{Path(film_filename).stem}_{i}{Path(film_filename).suffix}"
                 clip_path = os.path.join('data', 'tmp', clip_filename)
                 clip.write_videofile(clip_path,
@@ -131,24 +149,28 @@ class ProcessPipe(Thread):
                 with open(updated_clip_path, 'wb') as f:
                     f.write(updated_clip_content)
                 # Склеивание с текущим обработанным фильмом
-                if not os.path.exists(updated_film_path):
+                if not os.path.exists(os.path.join('data', 'films', f'{name}_{i-1}{ext}')):
                     updated_film = mp.VideoFileClip(updated_clip_path)
                     with Session() as session:
                         film = session.query(Film).filter(Film.id == film.id).first()
                         film.output_video_filename = updated_film_filename
                         session.commit()
                 else:
-                    updated_film = mp.concatenate_videoclips([mp.VideoFileClip(updated_film_path),
-                                                          mp.VideoFileClip(updated_clip_path)])
+                    updated_film = mp.concatenate_videoclips([mp.VideoFileClip(os.path.join('data', 'films', f'{name}_{i-1}{ext}')),
+                                                              mp.VideoFileClip(updated_clip_path)])
+                    
                 print(f"Фильм дополнен до {updated_film.duration} секунд")
                 updated_film.write_videofile(updated_film_path,
                                              codec='libx264' if 'mkv' in Path(updated_film_path).suffix else None)
+                if i > 0:
+                    os.remove(os.path.join('data', 'films', f'{name}_{i-1}{ext}'))
                 # Удалить временные файлы
-                clip.close()
+                updated_film.close()
                 if os.path.exists(clip_path):
                     os.remove(clip_path)
                 if os.path.exists(updated_clip_path):
                     os.remove(updated_clip_path)
+            clip.close()
             if broken_film:
                 # TODO: Сохранить фильм в базу данных как "broken"
                 continue
