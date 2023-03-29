@@ -1,3 +1,4 @@
+# ОЧЕНЬ ТЯЖЕЛЫЙ ОБРАЗ < 16 ГБ ОЗУ НЕ РЕКОМЕНДУЕТСЯ!!
 # Use an official Python runtime as a parent image
 FROM python:3.8.5
 

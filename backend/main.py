@@ -1,24 +1,22 @@
-import http.client
 import os
 import re
-from datetime import time, datetime
+from datetime import datetime
+from pathlib import Path
+from threading import Lock, Thread
+from time import sleep
+from typing import Callable, Any, Iterable, Mapping
 
+import moviepy.editor as mp
+import requests
 from flask import Flask, request, Response, send_file
 from flask_cors import CORS
+
 from model.film import Film, Session
 
 app = Flask(__name__)
 CORS(app)
 
-
-def get_notifications_to_user(user_id):
-    return [{"id": 1, "text": "Вы не закончили форму"},
-            {"id": 2, "text": "Скоро закрывается форма для регистрации соревнования"}]
-
-
-def union_article_and_url(article: str, url: str) -> str:
-    return f"<a href='{url}' target='_blank'>{article}</a>"
-
+NN_API_URL = "http://localhost:8081"
 
 @app.route('/api/await_url_updated_video', methods=['GET'], strict_slashes=False)
 def wait_and_get_url_to_updated_video():
@@ -39,7 +37,72 @@ def wait_and_get_url_to_updated_video():
         time_now = datetime.now()
         if (time_now - time_start).seconds > 60:
             return {"url": None}
-    return {"url": f"http://localhost:8080/api/get_video?film_id={film_id}&only_updated=1"}
+    return {"url": f"{NN_API_URL}/api/get_video?film_id={film_id}&only_updated=1"}
+
+
+class ProcessPipe(Thread):
+
+    def __init__(self, group: None = None,
+                 target: Callable[..., Any] | None = None,
+                 name: str | None = None,
+                 args: Iterable[Any] = None,
+                 kwargs: Mapping[str, Any] | None = None,
+                 *,
+                 daemon: bool | None = None) -> None:
+        super().__init__(group, target, name, args, kwargs, daemon=daemon)
+        self.lock = Lock()
+        self.films_to_process: list[Film] = []
+        self.films_in_process: list[Film] = []
+        self.is_running = False
+
+    def run(self) -> None:
+        while True:
+            if len(self.films_to_process) < 1:
+                sleep(1)
+                continue
+            with self.lock:
+                self.films_in_process = self.films_to_process[:1]
+                self.films_to_process = self.films_to_process[1:]
+            self.iterate_process()
+
+    def add_film_to_processing(self, film: Film):
+        with self.lock:
+            if film not in self.films_to_process:
+                self.films_to_process.append(film)
+
+    def iterate_process(self):
+        if len(self.films_in_process) < 1:
+            return
+        for film in self.films_in_process.copy():
+            with self.lock:
+                self.films_in_process.remove(film)
+            path = film.input_filename
+            if not os.path.exists(os.path.join('data', 'films', path)):
+                continue
+            # Отправить файл на обработку в нейросеть через NN_API_URL/api POST
+            r = requests.post(f"{NN_API_URL}/api",
+                              files={"file": open(os.path.join('data', 'films', path), 'rb')})
+            # Получить ответ в виде файла и сохранить его с тем же именем,
+            # что и входной файл, но с добавкой "_updated"
+            # Проверка наличия в ответе файла
+            if r.status_code != 200:
+                continue
+            if r.headers['Content-Type'] != 'video/mp4':
+                continue
+            filename_out = Path(path).stem + '_updated' + Path(path).suffix
+            with open(os.path.join('data', 'films', filename_out), 'wb') as f:
+                f.write(r.content)
+            # Обновить запись в бд
+            with Session() as session:
+                film = session.query(Film).filter(Film.id == film.id).first()
+                film.output_video_filename = filename_out
+                session.commit()
+                session.flush()
+            pass
+
+
+pipe = ProcessPipe()
+pipe.start()
 
 
 # Получение видео в запросе
@@ -66,6 +129,9 @@ def handle_request():
         # Сохранение файла на data/films
         with open(os.path.join('data', 'films', file.filename), 'wb') as f:
             f.write(file_content)
+        # Отправка файла на обработку
+        pipe.add_film_to_processing(film)
+        pipe.join(0.02)
 
         # Возвращение id фильма
         return {"id": film.id}
@@ -75,10 +141,11 @@ def handle_request():
     finally:
         session.close()
 
+
 def video_length(path):
-    import moviepy.editor as mp
     duration = mp.VideoFileClip(path).duration
     return duration
+
 
 @app.route('/api/get_video/', methods=['GET'], strict_slashes=False)
 def get_video():
@@ -87,7 +154,6 @@ def get_video():
         film_id = request.args.get('film_id')
         film = session.query(Film).filter(Film.id == film_id).first()
         only_updated = request.args.get('only_updated', 'false').lower() in ['true', '1']
-        only_source = request.args.get('only_source', 'false').lower() in ['true', '1']
         metadata = request.args.get('metadata', 'false').lower() in ['true', '1']
         if film is None:
             return {"status": "error", "message": "Фильм не найден"}
@@ -108,55 +174,6 @@ def get_video():
         return {"status": "error", "message": "Неизвестная ошибка"}
     finally:
         session.close()
-
-
-def find_and_format_email(msg: str) -> str:
-    # Regular expression pattern for matching email addresses
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-
-    # Find all email addresses in the string using regex
-    matches = re.findall(email_pattern, msg)
-
-    # Replace each email address with the formatted version
-    for match in matches:
-        msg = msg.replace(match, f'<b>{match}</b>')
-
-    return msg
-
-
-@app.route('/api/voice', methods=['POST'])
-def handle_request_audio():
-    # get the data from the request
-    audio = request.values.get('file')
-
-    from_url = request.form.get('from_url')
-    is_web = request.values.get('is_web', False)
-    # process audio to text
-    text = get_text(audio)
-
-    # process the data (for example, send it to another server and get the response)
-    result = web_bot(text)
-    if is_web:
-        result = find_and_format_email(result)
-    return {"text": ' '.join(result[0])}
-    # return the response to the bot
-    return {"text": "Response from the API server", "buttons_text": ["Only", "One", "Word"]}
-
-
-@app.route('/api/notifications', methods=['GET'])
-def handle_request_notifications():
-    from_url = request.form.get('from_url')
-    # process audio to text
-    user_id = request.form.get('user_id')
-
-    return {"notifications": get_notifications_to_user(user_id)}
-
-
-@app.route('/api/notifications/acknowledge', methods=['POST'])
-def handle_request_acknowledge_notification():
-    pass
-
-    return http.client.OK
 
 
 if __name__ == '__main__':

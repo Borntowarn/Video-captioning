@@ -1,0 +1,5 @@
+conda activate modelscope
+cd app/nn
+nohup python nn_api.py&
+cd app/backend
+nohup python main.py&

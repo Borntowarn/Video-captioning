@@ -5,7 +5,7 @@ services:
     build: ./backend
     environment:
       - PORT=8080
-      - PORT_NN_API=8081
+      - NN_API_URL=http://localhost:8081
     ports:
       - "8080:8080"
 
@@ -14,3 +14,5 @@ services:
     build: ./nn
     environment:
       - PORT=8081
+    ports:
+      - "8081:8081"
