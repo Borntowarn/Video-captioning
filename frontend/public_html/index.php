@@ -111,9 +111,9 @@
                     style="width: 65%;"
             >
                 <!-- Video files -->
-                <!--                        http://projectvoid.play.ai:8080/api/get_video?film_id=2&only_updated=0-->
+                <!--                        http://pinkcats.my.to:8080/api/get_video?film_id=2&only_updated=0-->
                 <source
-                        src="http://projectvoid.play.ai:8080/api/get_video?film_id=4&only_updated=0"
+                        src="http://pinkcats.my.to:8080/api/get_video?film_id=4&only_updated=0"
                         type="video/mp4"
                         size="1080"
                         id="path_to_video"
@@ -414,7 +414,7 @@
         if(document.getElementById('switch_btn').checked) {
             $.ajax({
                 type: "GET",
-                url: "http://projectvoid.play.ai:8080/api/get_video",
+                url: "http://pinkcats.my.to:8080/api/get_video",
                 dataType: "json",
                 data: {
                     'film_id': 4,       // id фильма
@@ -452,7 +452,7 @@
                             document.getElementById('video_body').style.display = 'block';
 
                             // гет запрос на получения видео из api
-                            document.getElementById('path_to_video').src = 'http://projectvoid.play.ai:8080/api/get_video?film_id=4&only_updated=1';
+                            document.getElementById('path_to_video').src = 'http://pinkcats.my.to:8080/api/get_video?film_id=4&only_updated=1';
                             player.load();  // перезагружаем плеер
 
                             console.log(document.getElementById('path_to_video').src, videotime);

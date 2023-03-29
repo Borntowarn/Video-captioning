@@ -9,7 +9,7 @@ function checkAddress(){
     if(switch_btn){
         $.ajax({
             type:"GET",
-            url:"http://projectvoid.play.ai:8080/api/get_video",
+            url:"http://pinkcats.my.to:8080/api/get_video",
             dataType:"json",
             data: {
                 'film_id': 4,
@@ -28,7 +28,7 @@ function checkAddress(){
                     document.getElementById('video_body').style.display = 'block';
                 }
 
-                document.getElementById('path_to_video').src = 'http://projectvoid.play.ai:8080/api/get_video?film_id=4&only_updated=1';
+                document.getElementById('path_to_video').src = 'http://pinkcats.my.to:8080/api/get_video?film_id=4&only_updated=1';
                 console.log(document.getElementById('path_to_video').src);
                 var player = document.getElementById('player');
                 player.load();
@@ -37,7 +37,7 @@ function checkAddress(){
     }else{  // запрос стандартного видео
         $.ajax({
             type:"GET",
-            url:"http://projectvoid.play.ai:8080/api/get_video",
+            url:"http://pinkcats.my.to:8080/api/get_video",
             dataType:"json",
             data: {
                 'film_id': 4,
@@ -52,7 +52,7 @@ function checkAddress(){
                 document.getElementById('animation').style.display = 'none';
                 document.getElementById('video_body').style.display = 'block';
 
-                document.getElementById('path_to_video').src = 'http://projectvoid.play.ai:8080/api/get_video?film_id=4&only_updated=0';
+                document.getElementById('path_to_video').src = 'http://pinkcats.my.to:8080/api/get_video?film_id=4&only_updated=0';
                 console.log(document.getElementById('path_to_video').src);
                 var player = document.getElementById('player');
                 player.load();
