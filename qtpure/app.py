@@ -5,17 +5,12 @@ import traceback
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow
 
-from qtpure.buttonController import uploadController
-from qtpure.design import Ui_MainWindow
-from qtpure.design_second import Ui_MainWindow as final_window
-from qtpure.dragController import dragEnterEvent, \
+from buttonController import uploadController
+from design import Ui_MainWindow
+from design_second import Ui_MainWindow as final_window
+from dragController import dragEnterEvent, \
     dragLeaveEventWrapper, dragMoveEventWrapper, dropEventWrapper
-def except_hook(exctype, value, traceback):
-    # Print the error and traceback
-    print(exctype, value, traceback)
-    # Call the normal Exception hook after
-    sys._excepthook(exctype, value, traceback)
-    sys.exit(1)
+
 if __name__ == '__main__':
     app = QApplication([])
     style = open("qt_styles", mode="r", encoding='utf8')
@@ -44,13 +39,5 @@ if __name__ == '__main__':
     main_window.setMinimumSize(800, 600)
     main_window.setWindowIcon(QIcon('../icon.jpg'))
     main_window.show()
-    sys.excepthook = except_hook
 
-    try:
-        sys.exit(app.exec_())
-    except Exception as e:
-        print(e)
-        raise e
-    finally:
-        traceback.print_exc()
-        print("END")
+    sys.exit(app.exec_())

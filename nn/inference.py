@@ -45,5 +45,11 @@ def main(root_path, videos_path):
 if __name__ == '__main__':
     root_path = 'inference_videos'
     videos_path = 'clips'
+    # Проверка наличия папки inference_videos
+    if not os.path.exists(root_path):
+        os.makedirs(root_path)
+    # Проверка наличия папки clips внутри inference_videos
+    if not os.path.exists(os.path.join(root_path, videos_path)):
+        os.makedirs(os.path.join(root_path, videos_path))
     main(root_path, videos_path)
     delete_files(root_path)

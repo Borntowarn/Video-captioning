@@ -2,8 +2,8 @@ from os.path import isfile
 
 from PyQt5.QtWidgets import QMainWindow, QWidget
 
-from qtpure.buttonController import uploadController, uploadControllerSecond
-from qtpure.modal_drop import Ui_Form
+from buttonController import uploadController, uploadControllerSecond
+from modal_drop import Ui_Form
 
 
 def dragEnterEvent(event):
